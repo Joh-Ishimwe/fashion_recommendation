@@ -1,43 +1,52 @@
 # src/api.py
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 import pandas as pd
 import joblib
-from preprocess import preprocess_new_data  # Reuse your preprocessing function
+from preprocess import preprocess_new_data
+from datetime import datetime
+from models import FashionItem
+from config import MODEL_PATH, SCALER_PATH, FEATURE_COLUMNS_PATH, LABEL_ENCODER_PATH
+from data import get_mongo_collection
+
 
 app = FastAPI(title="Fashion Recommendation API")
-
-# Load the trained model and artifacts
-MODEL_PATH = "models/best_model.pkl"
-SCALER_PATH = "models/scaler.pkl"
-FEATURE_COLUMNS_PATH = "models/feature_columns.pkl"
-LABEL_ENCODER_PATH = "models/label_encoder.pkl"
 
 model = joblib.load(MODEL_PATH)
 scaler = joblib.load(SCALER_PATH)
 feature_columns = joblib.load(FEATURE_COLUMNS_PATH)
 le = joblib.load(LABEL_ENCODER_PATH)
 
-# Define input data model
-class FashionItem(BaseModel):
-    gender: str
-    masterCategory: str
-    subCategory: str
-    articleType: str
-    baseColour: str
-    season: str
-    year: int
+# Define valid categories (based on your dataset)
+VALID_GENDERS = ["men", "women", "boys", "girls", "unisex"]
+VALID_MASTER_CATEGORIES = ["apparel", "accessories", "footwear", "personal care", "free items"]
+VALID_SEASONS = ["summer", "winter", "spring", "fall"]
+
 
 @app.get("/")
 async def root():
     return {"message": "Welcome to the Fashion Recommendation API"}
 
+
+@app.get("/fashion_items/")
+async def get_fashion_items(gender: str = None, limit: int = 10):
+    try:
+        collection = get_mongo_collection()
+        query = {"gender": gender} if gender else {}
+        items = list(collection.find(query).limit(limit))
+        for item in items:
+            item["_id"] = str(item["_id"])
+        return {"items": items}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
 @app.post("/predict/")
 async def predict_usage(item: FashionItem):
     """Predict the usage category for a fashion item."""
     try:
-        # Convert input to DataFrame
-        input_data = pd.DataFrame([item.dict()], columns=feature_columns)
+        # Convert input to DataFrame with raw columns
+        raw_columns = ["gender", "masterCategory", "subCategory", "articleType", "baseColour", "season", "year"]
+        input_data = pd.DataFrame([item.model_dump()], columns=raw_columns)
         
         # Preprocess the input
         X_new_scaled = preprocess_new_data(input_data, feature_columns, scaler)

@@ -17,10 +17,10 @@ def preprocess_data(df):
     
     # One-hot encoding
     df_encoded = pd.get_dummies(df[categorical_cols])
-    feature_columns = df_encoded.columns.tolist()
     
     # Combine with numerical data
     X = pd.concat([df[numerical_cols], df_encoded], axis=1)
+    feature_columns = X.columns.tolist()  # Include numerical and encoded columns
     
     # Scale features
     scaler = StandardScaler()
@@ -47,10 +47,15 @@ def preprocess_new_data(df_new, feature_columns, scaler):
     
     # One-hot encoding with training feature columns
     df_encoded = pd.get_dummies(df_new[categorical_cols])
-    df_encoded = df_encoded.reindex(columns=feature_columns, fill_value=0)
+    # Reindex to match feature_columns, excluding numerical_cols (they're already in df_new[numerical_cols])
+    encoded_feature_columns = [col for col in feature_columns if col not in numerical_cols]
+    df_encoded = df_encoded.reindex(columns=encoded_feature_columns, fill_value=0)
     
     # Combine with numerical data
     X_new = pd.concat([df_new[numerical_cols], df_encoded], axis=1)
+    
+    # Ensure X_new has the same columns as feature_columns
+    X_new = X_new.reindex(columns=feature_columns, fill_value=0)
     
     # Scale features
     X_new_scaled = scaler.transform(X_new)
