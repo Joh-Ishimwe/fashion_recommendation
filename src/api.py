@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException, File, UploadFile
 from pydantic import BaseModel, Field, validator
 import pandas as pd
 import joblib
+import csv  # Add this import
 from preprocess import preprocess_data, preprocess_new_data
 from train import train_and_evaluate
 from data import get_mongo_collection, upload_to_mongo, load_from_mongo
@@ -71,13 +72,17 @@ async def upload_data(file: UploadFile = File(...)):
 
         # Save the uploaded file temporarily
         temp_file_path = f"temp_{file.filename}"
+        logger.info(f"Saving temporary file to {temp_file_path}")
         with open(temp_file_path, "wb") as temp_file:
             content = await file.read()  # Read the file content
             temp_file.write(content)
 
         # Read the CSV file with error handling for malformed data
+        logger.info("Reading CSV file...")
         try:
-            df = pd.read_csv(temp_file_path, quoting=1, on_bad_lines='skip')  # quoting=1 is csv.QUOTE_ALL
+            df = pd.read_csv(temp_file_path, quoting=csv.QUOTE_ALL, on_bad_lines='skip', encoding='utf-8')
+            logger.info(f"CSV read successfully. Shape: {df.shape}")
+            logger.info(f"Columns in CSV: {df.columns.tolist()}")
         except Exception as e:
             logger.error(f"Failed to read CSV file: {str(e)}")
             raise HTTPException(status_code=400, detail=f"Error reading CSV file: {str(e)}")
@@ -90,10 +95,13 @@ async def upload_data(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail=f"Missing required columns: {missing_columns}")
 
         # Upload to MongoDB
+        logger.info("Uploading to MongoDB...")
         upload_to_mongo(df)
+        logger.info("Upload to MongoDB completed.")
         
         # Remove the temporary file
         os.remove(temp_file_path)
+        logger.info("Temporary file removed.")
         
         return {"message": f"Successfully uploaded {len(df)} records to MongoDB"}
     except Exception as e:
