@@ -30,6 +30,27 @@ def preprocess_data(df):
     le = LabelEncoder()
     y_encoded = le.fit_transform(df['usage'].fillna('Unknown'))
     
+    # Debug: Print the class distribution of y
+    print("Class distribution in 'usage' before filtering:")
+    print(pd.Series(le.inverse_transform(y_encoded)).value_counts())
+    
+    # Filter out classes with fewer than 2 instances
+    class_counts = pd.Series(y_encoded).value_counts()
+    valid_classes = class_counts[class_counts >= 2].index
+    mask = pd.Series(y_encoded).isin(valid_classes)
+    X_scaled = X_scaled[mask]
+    y_encoded = y_encoded[mask]
+    
+    # Update df to reflect the filtered data
+    df = df[mask.reset_index(drop=True)]
+    
+    # Re-encode y_encoded to ensure consecutive labels
+    y_encoded = le.fit_transform(df['usage'].fillna('Unknown'))
+    
+    # Debug: Print the class distribution after filtering
+    print("Class distribution in 'usage' after filtering:")
+    print(pd.Series(le.inverse_transform(y_encoded)).value_counts())
+    
     return X_scaled, y_encoded, feature_columns, scaler, le
 
 def preprocess_new_data(df_new, feature_columns, scaler):
@@ -47,7 +68,6 @@ def preprocess_new_data(df_new, feature_columns, scaler):
     
     # One-hot encoding with training feature columns
     df_encoded = pd.get_dummies(df_new[categorical_cols])
-    # Reindex to match feature_columns, excluding numerical_cols (they're already in df_new[numerical_cols])
     encoded_feature_columns = [col for col in feature_columns if col not in numerical_cols]
     df_encoded = df_encoded.reindex(columns=encoded_feature_columns, fill_value=0)
     

@@ -1,82 +1,49 @@
 # src/data.py
-import pandas as pd
-from pymongo import MongoClient
 import os
+from pymongo import MongoClient
+import pandas as pd
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
-# MongoDB configuration from .env
-MONGO_URI = os.getenv("MONGO_URI")
-DB_NAME = os.getenv("DB_NAME")
-COLLECTION_NAME = os.getenv("COLLECTION_NAME")
+# MongoDB configuration
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+DB_NAME = os.getenv("DB_NAME", "Fashion-Styles_db")
+COLLECTION_NAME = os.getenv("COLLECTION_NAME", "Fashion_data")
 
 def get_mongo_collection():
     """Connect to MongoDB and return the collection."""
-    try:
-        if not MONGO_URI or not DB_NAME or not COLLECTION_NAME:
-            raise ValueError("MongoDB configuration is missing. Check .env file.")
-        client = MongoClient(MONGO_URI)
-        db = client[DB_NAME]
-        collection = db[COLLECTION_NAME]
-        print(f"Connected to MongoDB: {DB_NAME}.{COLLECTION_NAME}")
-        return collection
-    except Exception as e:
-        print(f"Error connecting to MongoDB: {str(e)}")
-        raise
+    client = MongoClient(MONGO_URI)
+    db = client[DB_NAME]
+    collection = db[COLLECTION_NAME]
+    return collection
 
-def upload_csv_to_mongo(file_path='data/styles.csv'):  # Updated to styles.csv
-    """Upload CSV data to MongoDB, skipping bad lines."""
+def upload_csv_to_mongo(file_path: str):
+    """Upload a CSV file to MongoDB."""
     try:
-        # Load CSV into DataFrame, skipping malformed rows
-        df = pd.read_csv(file_path, on_bad_lines='skip')
-        print(f"Loaded {len(df)} records from {file_path} (skipped malformed rows)")
-        
-        # Convert DataFrame to list of dictionaries
-        data = df.to_dict(orient='records')
-        
-        # Connect to MongoDB
+        df = pd.read_csv(file_path)
         collection = get_mongo_collection()
-        
-        # Drop existing collection to avoid duplicates (optional)
-        collection.drop()
-        print(f"Dropped existing collection '{COLLECTION_NAME}'.")
-        
-        # Insert data
-        collection.insert_many(data)
-        print(f"Uploaded {len(data)} records to MongoDB collection '{COLLECTION_NAME}'.")
-    except FileNotFoundError:
-        print(f"Error: File '{file_path}' not found.")
-        raise
+        collection.delete_many({})  # Clear existing data
+        collection.insert_many(df.to_dict('records'))
+        print(f"Uploaded {len(df)} records to MongoDB")
     except Exception as e:
-        print(f"Error uploading to MongoDB: {str(e)}")
+        print(f"Error uploading to MongoDB: {e}")
         raise
 
 def load_data_from_mongo():
     """Load data from MongoDB into a DataFrame."""
     try:
-        # Connect to MongoDB
         collection = get_mongo_collection()
-        
-        # Fetch all documents
         data = list(collection.find())
-        if not data:
-            print("No data found in MongoDB collection.")
-            raise ValueError("MongoDB collection is empty.")
-        
-        # Convert to DataFrame and remove '_id' field
-        df = pd.DataFrame(data).drop(columns=['_id'], errors='ignore')
-        print(f"Loaded {len(df)} records from MongoDB.")
+        df = pd.DataFrame(data)
+        if '_id' in df.columns:
+            df = df.drop('_id', axis=1)
         return df
     except Exception as e:
-        print(f"Error loading data from MongoDB: {str(e)}")
+        print(f"Error loading from MongoDB: {e}")
         raise
 
-if __name__ == "__main__":
-    # Upload the CSV to MongoDB (run this once)
-    upload_csv_to_mongo()
-    
-    # Test loading from MongoDB
-    df = load_data_from_mongo()
-    print(df.head())
+# Aliases to match pipeline.py imports
+upload_to_mongo = upload_csv_to_mongo
+load_from_mongo = load_data_from_mongo

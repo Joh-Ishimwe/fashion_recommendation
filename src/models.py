@@ -1,6 +1,7 @@
 # src/models.py
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
+from fastapi import HTTPException
 
 class FashionItem(BaseModel):
     gender: str = Field(..., description="Gender of the item")
@@ -27,6 +28,24 @@ class FashionItem(BaseModel):
             raise ValueError(f"MasterCategory must be one of {VALID_MASTER_CATEGORIES}")
         return v_lower.capitalize()
 
+    @validator("subCategory")
+    def validate_sub_category(cls, v):
+        if not v.strip():
+            raise ValueError("subCategory cannot be empty")
+        return v
+
+    @validator("articleType")
+    def validate_article_type(cls, v):
+        if not v.strip():
+            raise ValueError("articleType cannot be empty")
+        return v
+
+    @validator("baseColour")
+    def validate_base_colour(cls, v):
+        if not v.strip():
+            raise ValueError("baseColour cannot be empty")
+        return v
+
     @validator("season")
     def validate_season(cls, v):
         VALID_SEASONS = ["summer", "winter", "spring", "fall"]
@@ -48,9 +67,12 @@ class FashionItem(BaseModel):
             return super().validate(values)
         except ValueError as e:
             error = e.errors()[0]
-            raise ValueError({
-                "type": error["type"],
-                "loc": error["loc"],
-                "msg": error["msg"],
-                "input": error["input"]
-            })
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "type": error["type"],
+                    "loc": error["loc"],
+                    "msg": error["msg"],
+                    "input": error["input"]
+                }
+            )
